@@ -43,7 +43,85 @@ namespace KYC_apllication_2.Repositories
             {
                 return null; // User not found
             }
+        
+            // Retrieve and validate the JWT key from configuration
+            var keyString = _configuration["Jwt:Key"];
+            if (string.IsNullOrWhiteSpace(keyString))
+            {
+                throw new ArgumentException("JWT key is not configured.");
+            }
+        
+            var key = Encoding.UTF8.GetBytes(keyString);
+            if (key.Length < 32)
+            {
+                throw new ArgumentException("Key length is less than 256 bits (32 characters). Ensure the key is at least 32 characters long.");
+            }
+        
+            var symmetricSecurityKey = new SymmetricSecurityKey(key);
+            var tokenHandler = new JwtSecurityTokenHandler();
+        
+            // Retrieve and validate the expiration time
+            if (!double.TryParse(_configuration["Jwt:ExpireMinutes"], out var expireMinutes))
+            {
+                throw new ArgumentException("Invalid JWT expiration time configured.");
+            }
+        
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(new Claim[]
+                {
+                    new Claim(ClaimTypes.Name, user.Username),
+                    new Claim(ClaimTypes.Role, user.Role)
+                }),
+                Expires = DateTime.UtcNow.AddMinutes(expireMinutes),
+                SigningCredentials = new SigningCredentials(symmetricSecurityKey, SecurityAlgorithms.HmacSha256Signature)
+            };
+        
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+            return tokenHandler.WriteToken(token);
+        }
+public async Task<string> GenerateJwtTokenAsync(string username)
+{
+    var user = await _context.Users.SingleOrDefaultAsync(u => u.Username == username);
+    if (user == null)
+    {
+        return null; // User not found
+    }
 
+    var keyString = _configuration["Jwt:Key"];
+    if (string.IsNullOrWhiteSpace(keyString))
+    {
+        throw new ArgumentException("JWT key is not configured.");
+    }
+
+    var key = Encoding.UTF8.GetBytes(keyString);
+    if (key.Length < 32)
+    {
+        throw new ArgumentException("Key length is less than 256 bits (32 characters). Ensure the key is at least 32 characters long.");
+    }
+
+    var symmetricSecurityKey = new SymmetricSecurityKey(key);
+    var tokenHandler = new JwtSecurityTokenHandler();
+
+    if (!double.TryParse(_configuration["Jwt:ExpireMinutes"], out var expireMinutes))
+    {
+        throw new ArgumentException("Invalid JWT expiration time configured.");
+    }
+
+    var tokenDescriptor = new SecurityTokenDescriptor
+    {
+        Subject = new ClaimsIdentity(new Claim[]
+        {
+            new Claim(ClaimTypes.Name, user.Username),
+            new Claim(ClaimTypes.Role, user.Role)
+        }),
+        Expires = DateTime.UtcNow.AddMinutes(expireMinutes),
+        SigningCredentials = new SigningCredentials(symmetricSecurityKey, SecurityAlgorithms.HmacSha256Signature)
+    };
+
+    var token = tokenHandler.CreateToken(tokenDescriptor);
+    return tokenHandler.WriteToken(token);
+}
             // Retrieve and validate the JWT key from configuration
             var keyString = _configuration["Jwt:Key"];
             if (string.IsNullOrWhiteSpace(keyString))
